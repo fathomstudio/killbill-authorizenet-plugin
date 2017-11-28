@@ -24,26 +24,26 @@
         <version>0.140.2</version>
     </parent>
     <groupId>com.fathomstudio</groupId>
-    <artifactId>killbill-basecommerce-plugin</artifactId>
+    <artifactId>killbill-authorizenet-plugin</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <name>Kill Bill OSGI Base Commerce plugin</name>
-    <description>Kill Bill Base Commerce plugin</description>
-    <url>https://github.com/fathomstudio/killbill-basecommerce-plugin</url>
+    <name>Kill Bill OSGI Authorize.Net plugin</name>
+    <description>Kill Bill Authorize.Net plugin</description>
+    <url>https://github.com/fathomstudio/killbill-authorizenet-plugin</url>
     <scm>
-        <connection>scm:git:git://github.com/fathomstudio/killbill-basecommerce-plugin.git</connection>
-        <developerConnection>scm:git:git@github.com:fathomstudio/killbill-basecommerce-plugin.git</developerConnection>
-        <url>http://github.com/fathomstudio/killbill-basecommerce-plugin/tree/master</url>
+        <connection>scm:git:git://github.com/fathomstudio/killbill-authorizenet-plugin.git</connection>
+        <developerConnection>scm:git:git@github.com:fathomstudio/killbill-authorize-plugin.git</developerConnection>
+        <url>http://github.com/fathomstudio/killbill-authorizenet-plugin/tree/master</url>
     </scm>
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/fathomstudio/killbill-basecommerce-plugin/issues</url>
+        <url>https://github.com/fathomstudio/killbill-authorizenet-plugin/issues</url>
     </issueManagement>
     <dependencies>
         <dependency>
-            <groupId>com.basecommercepay</groupId>
-            <artifactId>basecommercesdk</artifactId>
-            <version>5.1.91</version>
+            <groupId>net.authorize</groupId>
+            <artifactId>anet-java-sdk</artifactId>
+            <version>1.9.4</version>
             <scope>compile</scope>
         </dependency>
         <dependency>
@@ -116,10 +116,6 @@
         </dependency>
     </dependencies>
     <repositories>
-        <repository>
-            <id>local</id>
-            <url>file:///home/chris13524/.m2/repository/</url>
-        </repository>
     </repositories>
     <build>
         <plugins>
@@ -137,9 +133,9 @@
                 </executions>
                 <configuration>
                     <instructions>
-                        <Bundle-Activator>com.fathomstudio.killbillbasecommerceplugin.BaseCommerceActivator</Bundle-Activator>
+                        <Bundle-Activator>com.fathomstudio.killbillauthorizenetplugin.AuthorizeNetActivator</Bundle-Activator>
                         <Export-Package />
-                        <Private-Package>com.fathomstudio.killbillbasecommerceplugin.*</Private-Package>
+                        <Private-Package>com.fathomstudio.killbillauthorizenetplugin.*</Private-Package>
                         <!-- Optional resolution because exported by the Felix system bundle -->
                         <Import-Package>javax.net;
                             javax.crypto;
@@ -324,7 +320,7 @@
                 <artifactId>maven-shade-plugin</artifactId>
                 <executions>
                     <execution>
-                        <id>assemble-killbill-osgi-bundles-basecommerce-java-plugin</id>
+                        <id>assemble-killbill-osgi-bundles-authorizenet-java-plugin</id>
                         <phase>package</phase>
                         <goals>
                             <goal>shade</goal>
@@ -338,7 +334,7 @@
                                     <artifact>${project.groupId}:${project.artifactId}</artifact>
                                 </filter>
                                 <filter>
-                                    <artifact>com.basecommercepay:basecommercesdk</artifact>
+                                    <artifact>net.authorize:anet-java-sdk</artifact>
                                 </filter>
                             </filters>
                         </configuration>

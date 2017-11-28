@@ -28,17 +28,17 @@ import java.io.IOException;
 /**
  * This allows direct communication to the plugin from a caller.
  */
-public class BaseCommerceServlet extends HttpServlet {
+public class AuthorizeNetServlet extends HttpServlet {
 	
 	private final LogService logService;
 	
-	public BaseCommerceServlet(final LogService logService) {
+	public AuthorizeNetServlet(final LogService logService) {
 		this.logService = logService;
 	}
 	
 	@Override
 	protected void doGet(final HttpServletRequest req, final HttpServletResponse resp) throws ServletException, IOException {
-		// find me on http://killbill:8080/plugins/killbill-basecommerce-plugin
+		// find me on http://killbill:8080/plugins/killbill-authorizenet-plugin
 		logService.log(LogService.LOG_INFO, "Hello, world!");
 		resp.getOutputStream().print("Hello, world!");
 	}

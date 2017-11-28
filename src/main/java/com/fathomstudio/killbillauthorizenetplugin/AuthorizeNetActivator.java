@@ -31,11 +31,11 @@ import java.util.Hashtable;
 /**
  * This is the plugin entrance point.
  */
-public class BaseCommerceActivator extends KillbillActivatorBase {
+public class AuthorizeNetActivator extends KillbillActivatorBase {
 	//
 	// Ideally that string should match the pluginName on the filesystem, but there is no enforcement
 	//
-	public static final String PLUGIN_NAME = "killbill-basecommerce-plugin";
+	public static final String PLUGIN_NAME = "killbill-authorizenet-plugin";
 	
 	private OSGIKillbillEventDispatcher.OSGIKillbillEventHandler killbillEventHandler;
 	
@@ -44,15 +44,15 @@ public class BaseCommerceActivator extends KillbillActivatorBase {
 		super.start(context);
 		
 		// Register an event listener (optional)
-		killbillEventHandler = new BaseCommerceListener(logService, killbillAPI, dataSource);
+		killbillEventHandler = new AuthorizeNetListener(logService, killbillAPI, dataSource);
 		dispatcher.registerEventHandlers(killbillEventHandler);
 		
 		// As an example, this plugin registers a PaymentPluginApi (this could be changed to any other plugin api)
-		final PaymentPluginApi paymentPluginApi = new BaseCommercePaymentPluginApi(configProperties.getProperties(), logService, killbillAPI, dataSource);
+		final PaymentPluginApi paymentPluginApi = new AuthorizeNetPaymentPluginApi(configProperties.getProperties(), logService, killbillAPI, dataSource);
 		registerPaymentPluginApi(context, paymentPluginApi);
 		
 		// Register a servlet (optional)
-		final BaseCommerceServlet analyticsServlet = new BaseCommerceServlet(logService);
+		final AuthorizeNetServlet analyticsServlet = new AuthorizeNetServlet(logService);
 		registerServlet(context, analyticsServlet);
 	}
 	

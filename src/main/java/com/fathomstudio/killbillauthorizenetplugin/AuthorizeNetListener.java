@@ -38,12 +38,12 @@ import java.util.UUID;
 /**
  * Kill Bill events are listened to and handled here.
  */
-public class BaseCommerceListener extends PluginConfigurationEventHandler implements OSGIKillbillEventDispatcher.OSGIKillbillEventHandler {
+public class AuthorizeNetListener extends PluginConfigurationEventHandler implements OSGIKillbillEventDispatcher.OSGIKillbillEventHandler {
 	
 	private final LogService logService;
 	private final OSGIKillbillAPI osgiKillbillAPI;
 	
-	public BaseCommerceListener(final OSGIKillbillLogService logService, final OSGIKillbillAPI killbillAPI, final OSGIKillbillDataSource dataSource) {
+	public AuthorizeNetListener(final OSGIKillbillLogService logService, final OSGIKillbillAPI killbillAPI, final OSGIKillbillDataSource dataSource) {
 		super(new BluePayPluginConfigurationHandler(AuthorizeNetActivator.PLUGIN_NAME, killbillAPI, logService, dataSource));
 		this.logService = logService;
 		this.osgiKillbillAPI = killbillAPI;
@@ -128,7 +128,7 @@ public class BaseCommerceListener extends PluginConfigurationEventHandler implem
 			logService.log(LogService.LOG_INFO, "configured with test: " + test);
 			
 			// save the details to the database
-			String credentialsQuery = "INSERT INTO `baseCommerce_credentials` (`tenantId`, `username`, `password`, `key`, `test`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `tenantId` = ?, `username` = ?, `password` = ?, `key` = ?, `test` = ?";
+			String credentialsQuery = "INSERT INTO `authorizeNet_credentials` (`tenantId`, `username`, `password`, `key`, `test`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `tenantId` = ?, `username` = ?, `password` = ?, `key` = ?, `test` = ?";
 			try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(credentialsQuery)) {
 				statement.setString(1, kbTenantId.toString());
 				statement.setString(2, username);
