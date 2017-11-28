@@ -15,7 +15,7 @@
  * under the License.
  */
 
-package com.fathomstudio.killbillbasecommerceplugin;
+package com.fathomstudio.killbillauthorizenetplugin;
 
 import org.osgi.service.log.LogService;
 

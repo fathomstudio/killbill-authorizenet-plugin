@@ -15,7 +15,7 @@
  * under the License.
  */
 
-package com.fathomstudio.killbillbasecommerceplugin;
+package com.fathomstudio.killbillauthorizenetplugin;
 
 import com.basecommercepay.client.*;
 import org.joda.time.DateTime;

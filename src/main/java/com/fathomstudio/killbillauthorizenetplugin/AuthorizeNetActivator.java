@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package com.fathomstudio.killbillbasecommerceplugin;
+package com.fathomstudio.killbillauthorizenetplugin;
 
 import org.killbill.billing.osgi.api.OSGIPluginProperties;
 import org.killbill.billing.osgi.libs.killbill.KillbillActivatorBase;

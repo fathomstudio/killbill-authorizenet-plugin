@@ -16,7 +16,7 @@
  * under the License.
  */
 
-package com.fathomstudio.killbillbasecommerceplugin;
+package com.fathomstudio.killbillauthorizenetplugin;
 
 import org.killbill.billing.account.api.Account;
 import org.killbill.billing.account.api.AccountApiException;
@@ -44,7 +44,7 @@ public class BaseCommerceListener extends PluginConfigurationEventHandler implem
 	private final OSGIKillbillAPI osgiKillbillAPI;
 	
 	public BaseCommerceListener(final OSGIKillbillLogService logService, final OSGIKillbillAPI killbillAPI, final OSGIKillbillDataSource dataSource) {
-		super(new BluePayPluginConfigurationHandler(BaseCommerceActivator.PLUGIN_NAME, killbillAPI, logService, dataSource));
+		super(new BluePayPluginConfigurationHandler(AuthorizeNetActivator.PLUGIN_NAME, killbillAPI, logService, dataSource));
 		this.logService = logService;
 		this.osgiKillbillAPI = killbillAPI;
 	}
