@@ -1,6 +1,6 @@
-# Kill Bill BluePay Plugin
+# Kill Bill Authorize.Net Plugin
 
-Kill Bill plugin for BluePay.
+Kill Bill plugin for Authorize.Net.
 
 ## Building
 `mvn clean install`

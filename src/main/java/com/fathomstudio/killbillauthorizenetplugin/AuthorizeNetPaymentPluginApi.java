@@ -222,6 +222,10 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 	 */
 	@Override
 	public PaymentTransactionInfoPlugin purchasePayment(final UUID kbAccountId, final UUID kbPaymentId, final UUID kbTransactionId, final UUID kbPaymentMethodId, final BigDecimal amount, final Currency currency, final Iterable<PluginProperty> properties, final CallContext context) throws PaymentPluginApiException {
+		
+		// charge a customer profile
+		// https://developer.authorize.net/api/reference/index.html#payment-transactions-charge-a-customer-profile
+		
 		String loginId;
 		String transactionKey;
 		Boolean test;
@@ -678,6 +682,10 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 	 */
 	@Override
 	public void addPaymentMethod(final UUID kbAccountId, final UUID kbPaymentMethodId, final PaymentMethodPlugin paymentMethodProps, final boolean setDefault, final Iterable<PluginProperty> properties, final CallContext context) throws PaymentPluginApiException {
+		
+		// create a customer profile
+		// https://developer.authorize.net/api/reference/index.html#customer-profiles-create-customer-profile
+		
 		String loginId;
 		String transactionKey;
 		Boolean test;

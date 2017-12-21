@@ -41,12 +41,6 @@
     </issueManagement>
     <dependencies>
         <dependency>
-            <groupId>net.authorize</groupId>
-            <artifactId>anet-java-sdk</artifactId>
-            <version>1.9.4</version>
-            <scope>compile</scope>
-        </dependency>
-        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <scope>compile</scope>
@@ -59,6 +53,12 @@
         <dependency>
             <groupId>joda-time</groupId>
             <artifactId>joda-time</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>net.authorize</groupId>
+            <artifactId>anet-java-sdk</artifactId>
+            <version>1.9.4</version>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
@@ -115,8 +115,7 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
     </dependencies>
-    <repositories>
-    </repositories>
+    <repositories />
     <build>
         <plugins>
             <plugin>
