@@ -39,6 +39,7 @@ import org.killbill.billing.util.entity.Pagination;
 import org.osgi.service.log.LogService;
 
 import java.math.BigDecimal;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -230,193 +231,198 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 		String transactionKey;
 		Boolean test;
 		
-		String credentialsQuery = "SELECT `loginId`, `transactionKey`, `test` FROM `authorizeNet_credentials` WHERE `tenantId` = ?";
-		try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(credentialsQuery)) {
-			statement.setString(1, context.getTenantId().toString());
-			ResultSet resultSet = statement.executeQuery();
-			if (!resultSet.next()) {
-				throw new SQLException("no results");
-			}
-			loginId = resultSet.getString("loginId");
-			transactionKey = resultSet.getString("transactionKey");
-			test = resultSet.getBoolean("test");
-			logService.log(LogService.LOG_INFO, "loginId: " + loginId);
-			logService.log(LogService.LOG_INFO, "transactionKey: " + transactionKey);
-			logService.log(LogService.LOG_INFO, "test: " + test);
-		} catch (SQLException e) {
-			logService.log(LogService.LOG_ERROR, "could not retrieve credentials: ", e);
-			throw new PaymentPluginApiException("could not retrieve credentials", e);
-		}
-		
-		if (loginId == null || loginId.isEmpty()) {
-			throw new PaymentPluginApiException("missing loginId", new IllegalArgumentException());
-		}
-		if (transactionKey == null || transactionKey.isEmpty()) {
-			throw new PaymentPluginApiException("missing transactionKey", new IllegalArgumentException());
-		}
-		
-		boolean success = true;
-		String code = "";
-		String message = "";
-		
-		synchronized (envLock) {
-			// Set the request to operate in either the sandbox or production environment
-			ApiOperationBase.setEnvironment(test ? Environment.SANDBOX : Environment.PRODUCTION);
-			
-			// Create object with merchant authentication details
-			MerchantAuthenticationType merchantAuthenticationType = new MerchantAuthenticationType();
-			merchantAuthenticationType.setName(loginId);
-			merchantAuthenticationType.setTransactionKey(transactionKey);
-			
-			// get the account associated with the ID
-			final Account account;
-			try {
-				account = killbillAPI.getAccountUserApi().getAccountById(kbAccountId, context);
-			} catch (AccountApiException e) {
-				throw new RuntimeException(e);
-			}
-			
-			String customerProfileId;
-			String type;
-			
-			String transactionIdQuery = "SELECT `customerProfileId`, `type` FROM `authorizeNet_paymentMethods` WHERE `paymentMethodId` = ?";
-			try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(transactionIdQuery)) {
-				statement.setString(1, kbPaymentMethodId.toString());
+		try (Connection connection = dataSource.getDataSource().getConnection()) {
+			String credentialsQuery = "SELECT `loginId`, `transactionKey`, `test` FROM `authorizeNet_credentials` WHERE `tenantId` = ?";
+			try (PreparedStatement statement = connection.prepareStatement(credentialsQuery)) {
+				statement.setString(1, context.getTenantId().toString());
 				ResultSet resultSet = statement.executeQuery();
 				if (!resultSet.next()) {
 					throw new SQLException("no results");
 				}
-				customerProfileId = resultSet.getString("customerProfileId");
-				type = resultSet.getString("type");
+				loginId = resultSet.getString("loginId");
+				transactionKey = resultSet.getString("transactionKey");
+				test = resultSet.getBoolean("test");
+				logService.log(LogService.LOG_INFO, "loginId: " + loginId);
+				logService.log(LogService.LOG_INFO, "transactionKey: " + transactionKey);
+				logService.log(LogService.LOG_INFO, "test: " + test);
 			} catch (SQLException e) {
-				logService.log(LogService.LOG_ERROR, "could not retrieve transaction ID: ", e);
-				throw new PaymentPluginApiException("could not retrieve transaction ID", e);
+				logService.log(LogService.LOG_ERROR, "could not retrieve credentials: ", e);
+				throw new PaymentPluginApiException("could not retrieve credentials", e);
 			}
 			
-			// Set the profile ID to charge
-			CustomerProfilePaymentType profileToCharge = new CustomerProfilePaymentType();
-			profileToCharge.setCustomerProfileId(customerProfileId);
-			PaymentProfile paymentProfile = new PaymentProfile();
-			paymentProfile.setPaymentProfileId(customerProfileId);
-			profileToCharge.setPaymentProfile(paymentProfile);
+			if (loginId == null || loginId.isEmpty()) {
+				throw new PaymentPluginApiException("missing loginId", new IllegalArgumentException());
+			}
+			if (transactionKey == null || transactionKey.isEmpty()) {
+				throw new PaymentPluginApiException("missing transactionKey", new IllegalArgumentException());
+			}
 			
-			// Create the payment transaction request
-			TransactionRequestType txnRequest = new TransactionRequestType();
-			txnRequest.setTransactionType(TransactionTypeEnum.AUTH_CAPTURE_TRANSACTION.value());
-			txnRequest.setProfile(profileToCharge);
-			txnRequest.setAmount(amount);
+			boolean success = true;
+			String code = "";
+			String message = "";
 			
-			CreateTransactionRequest apiRequest = new CreateTransactionRequest();
-			apiRequest.setTransactionRequest(txnRequest);
-			CreateTransactionController controller = new CreateTransactionController(apiRequest);
-			controller.execute();
-			
-			
-			CreateTransactionResponse response = controller.getApiResponse();
-			
-			if (response != null) {
-				// If API Response is ok, go ahead and check the transaction response
-				if (response.getMessages().getResultCode() == MessageTypeEnum.OK) {
-					TransactionResponse result = response.getTransactionResponse();
-					if (result.getMessages() != null) {
-						logService.log(LogService.LOG_INFO, "Successfully created transaction with Transaction ID: " + result.getTransId());
-						logService.log(LogService.LOG_INFO, "Response Code: " + result.getResponseCode());
-						logService.log(LogService.LOG_INFO, "Message Code: " + result.getMessages().getMessage().get(0).getCode());
-						logService.log(LogService.LOG_INFO, "Description: " + result.getMessages().getMessage().get(0).getDescription());
-						logService.log(LogService.LOG_INFO, "Auth Code: " + result.getAuthCode());
+			synchronized (envLock) {
+				// Set the request to operate in either the sandbox or production environment
+				ApiOperationBase.setEnvironment(test ? Environment.SANDBOX : Environment.PRODUCTION);
+				
+				// Create object with merchant authentication details
+				MerchantAuthenticationType merchantAuthenticationType = new MerchantAuthenticationType();
+				merchantAuthenticationType.setName(loginId);
+				merchantAuthenticationType.setTransactionKey(transactionKey);
+				
+				// get the account associated with the ID
+				final Account account;
+				try {
+					account = killbillAPI.getAccountUserApi().getAccountById(kbAccountId, context);
+				} catch (AccountApiException e) {
+					throw new RuntimeException(e);
+				}
+				
+				String customerProfileId;
+				String type;
+				
+				String transactionIdQuery = "SELECT `customerProfileId`, `type` FROM `authorizeNet_paymentMethods` WHERE `paymentMethodId` = ?";
+				try (PreparedStatement statement = connection.prepareStatement(transactionIdQuery)) {
+					statement.setString(1, kbPaymentMethodId.toString());
+					ResultSet resultSet = statement.executeQuery();
+					if (!resultSet.next()) {
+						throw new SQLException("no results");
+					}
+					customerProfileId = resultSet.getString("customerProfileId");
+					type = resultSet.getString("type");
+				} catch (SQLException e) {
+					logService.log(LogService.LOG_ERROR, "could not retrieve transaction ID: ", e);
+					throw new PaymentPluginApiException("could not retrieve transaction ID", e);
+				}
+				
+				// Set the profile ID to charge
+				CustomerProfilePaymentType profileToCharge = new CustomerProfilePaymentType();
+				profileToCharge.setCustomerProfileId(customerProfileId);
+				PaymentProfile paymentProfile = new PaymentProfile();
+				paymentProfile.setPaymentProfileId(customerProfileId);
+				profileToCharge.setPaymentProfile(paymentProfile);
+				
+				// Create the payment transaction request
+				TransactionRequestType txnRequest = new TransactionRequestType();
+				txnRequest.setTransactionType(TransactionTypeEnum.AUTH_CAPTURE_TRANSACTION.value());
+				txnRequest.setProfile(profileToCharge);
+				txnRequest.setAmount(amount);
+				
+				CreateTransactionRequest apiRequest = new CreateTransactionRequest();
+				apiRequest.setTransactionRequest(txnRequest);
+				CreateTransactionController controller = new CreateTransactionController(apiRequest);
+				controller.execute();
+				
+				
+				CreateTransactionResponse response = controller.getApiResponse();
+				
+				if (response != null) {
+					// If API Response is ok, go ahead and check the transaction response
+					if (response.getMessages().getResultCode() == MessageTypeEnum.OK) {
+						TransactionResponse result = response.getTransactionResponse();
+						if (result.getMessages() != null) {
+							logService.log(LogService.LOG_INFO, "Successfully created transaction with Transaction ID: " + result.getTransId());
+							logService.log(LogService.LOG_INFO, "Response Code: " + result.getResponseCode());
+							logService.log(LogService.LOG_INFO, "Message Code: " + result.getMessages().getMessage().get(0).getCode());
+							logService.log(LogService.LOG_INFO, "Description: " + result.getMessages().getMessage().get(0).getDescription());
+							logService.log(LogService.LOG_INFO, "Auth Code: " + result.getAuthCode());
+						} else {
+							if (response.getTransactionResponse().getErrors() != null) {
+								code = response.getTransactionResponse().getErrors().getError().get(0).getErrorCode();
+								message = response.getTransactionResponse().getErrors().getError().get(0).getErrorText();
+								success = false;
+							}
+						}
 					} else {
-						if (response.getTransactionResponse().getErrors() != null) {
+						if (response.getTransactionResponse() != null && response.getTransactionResponse().getErrors() != null) {
 							code = response.getTransactionResponse().getErrors().getError().get(0).getErrorCode();
 							message = response.getTransactionResponse().getErrors().getError().get(0).getErrorText();
-							success = false;
+						} else {
+							code = response.getMessages().getMessage().get(0).getCode();
+							message = response.getMessages().getMessage().get(0).getText();
 						}
+						success = false;
 					}
 				} else {
-					if (response.getTransactionResponse() != null && response.getTransactionResponse().getErrors() != null) {
-						code = response.getTransactionResponse().getErrors().getError().get(0).getErrorCode();
-						message = response.getTransactionResponse().getErrors().getError().get(0).getErrorText();
-					} else {
-						code = response.getMessages().getMessage().get(0).getCode();
-						message = response.getMessages().getMessage().get(0).getText();
-					}
+					message = "Null Response.";
 					success = false;
 				}
-			} else {
-				message = "Null Response.";
-				success = false;
 			}
+			
+			// send response
+			final boolean finalSuccess = success;
+			final String finalMessage = message;
+			final String finalCode = code;
+			return new PaymentTransactionInfoPlugin() {
+				@Override
+				public UUID getKbPaymentId() {
+					return kbPaymentId;
+				}
+				
+				@Override
+				public UUID getKbTransactionPaymentId() {
+					return kbTransactionId;
+				}
+				
+				@Override
+				public TransactionType getTransactionType() {
+					return TransactionType.PURCHASE;
+				}
+				
+				@Override
+				public BigDecimal getAmount() {
+					return amount;
+				}
+				
+				@Override
+				public Currency getCurrency() {
+					return currency;
+				}
+				
+				@Override
+				public DateTime getCreatedDate() {
+					return DateTime.now();
+				}
+				
+				@Override
+				public DateTime getEffectiveDate() {
+					return DateTime.now();
+				}
+				
+				@Override
+				public PaymentPluginStatus getStatus() {
+					return finalSuccess ? PaymentPluginStatus.PROCESSED : PaymentPluginStatus.ERROR;
+				}
+				
+				@Override
+				public String getGatewayError() {
+					return finalMessage;
+				}
+				
+				@Override
+				public String getGatewayErrorCode() {
+					return finalCode;
+				}
+				
+				@Override
+				public String getFirstPaymentReferenceId() {
+					return null;
+				}
+				
+				@Override
+				public String getSecondPaymentReferenceId() {
+					return null;
+				}
+				
+				@Override
+				public List<PluginProperty> getProperties() {
+					return null;
+				}
+			};
+		} catch (SQLException e) {
+			logService.log(LogService.LOG_ERROR, "could not retrieve transaction ID: ", e);
+			throw new PaymentPluginApiException("could not retrieve transaction ID", e);
 		}
-		
-		// send response
-		final boolean finalSuccess = success;
-		final String finalMessage = message;
-		final String finalCode = code;
-		return new PaymentTransactionInfoPlugin() {
-			@Override
-			public UUID getKbPaymentId() {
-				return kbPaymentId;
-			}
-			
-			@Override
-			public UUID getKbTransactionPaymentId() {
-				return kbTransactionId;
-			}
-			
-			@Override
-			public TransactionType getTransactionType() {
-				return TransactionType.PURCHASE;
-			}
-			
-			@Override
-			public BigDecimal getAmount() {
-				return amount;
-			}
-			
-			@Override
-			public Currency getCurrency() {
-				return currency;
-			}
-			
-			@Override
-			public DateTime getCreatedDate() {
-				return DateTime.now();
-			}
-			
-			@Override
-			public DateTime getEffectiveDate() {
-				return DateTime.now();
-			}
-			
-			@Override
-			public PaymentPluginStatus getStatus() {
-				return finalSuccess ? PaymentPluginStatus.PROCESSED : PaymentPluginStatus.ERROR;
-			}
-			
-			@Override
-			public String getGatewayError() {
-				return finalMessage;
-			}
-			
-			@Override
-			public String getGatewayErrorCode() {
-				return finalCode;
-			}
-			
-			@Override
-			public String getFirstPaymentReferenceId() {
-				return null;
-			}
-			
-			@Override
-			public String getSecondPaymentReferenceId() {
-				return null;
-			}
-			
-			@Override
-			public List<PluginProperty> getProperties() {
-				return null;
-			}
-		};
 	}
 	
 	@Override
@@ -690,89 +696,90 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 		String transactionKey;
 		Boolean test;
 		
-		String credentialsQuery = "SELECT `loginId`, `transactionKey`, `test` FROM `authorizeNet_credentials` WHERE `tenantId` = ?";
-		try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(credentialsQuery)) {
-			statement.setString(1, context.getTenantId().toString());
-			ResultSet resultSet = statement.executeQuery();
-			if (!resultSet.next()) {
-				throw new SQLException("no results");
-			}
-			loginId = resultSet.getString("loginId");
-			transactionKey = resultSet.getString("transactionKey");
-			test = resultSet.getBoolean("test");
-			logService.log(LogService.LOG_INFO, "loginId: " + loginId);
-			logService.log(LogService.LOG_INFO, "transactionKey: " + transactionKey);
-			logService.log(LogService.LOG_INFO, "test: " + test);
-		} catch (SQLException e) {
-			logService.log(LogService.LOG_ERROR, "could not retrieve credentials: ", e);
-			throw new PaymentPluginApiException("could not retrieve credentials", e);
-		}
-		
-		if (loginId == null || loginId.isEmpty()) {
-			throw new PaymentPluginApiException("missing loginId", new IllegalArgumentException());
-		}
-		if (transactionKey == null || transactionKey.isEmpty()) {
-			throw new PaymentPluginApiException("missing transactionKey", new IllegalArgumentException());
-		}
-		
-		String customerProfileId;
-		String type;
-		
-		synchronized (envLock) {
-			// Set the request to operate in either the sandbox or production environment
-			ApiOperationBase.setEnvironment(test ? Environment.SANDBOX : Environment.PRODUCTION);
-			
-			// Create object with merchant authentication details
-			MerchantAuthenticationType merchantAuthenticationType = new MerchantAuthenticationType();
-			merchantAuthenticationType.setName(loginId);
-			merchantAuthenticationType.setTransactionKey(transactionKey);
-			
-			String paymentType = null;
-			
-			String creditCardNumber = null;
-			String creditCardCVV2 = null;
-			String creditCardExpirationMonth = null;
-			String creditCardExpirationYear = null;
-			
-			String routingNumber = null;
-			String accountNumber = null;
-			
-			// get the client-passed properties including BluePay auth details and appropriate credit card or ACH details
-			for (PluginProperty property : paymentMethodProps.getProperties()) {
-				String kv_key = property.getKey();
-				Object value = property.getValue();
-				logService.log(LogService.LOG_INFO, "key: " + kv_key);
-				logService.log(LogService.LOG_INFO, "value: " + value);
-				if (Objects.equals(kv_key, "paymentType")) {
-					logService.log(LogService.LOG_INFO, "setting paymentType");
-					paymentType = value.toString();
-				} else if (Objects.equals(kv_key, "creditCardNumber")) {
-					creditCardNumber = value.toString();
-				} else if (Objects.equals(kv_key, "creditCardCVV2")) {
-					creditCardCVV2 = value.toString();
-				} else if (Objects.equals(kv_key, "creditCardExpirationMonth")) {
-					creditCardExpirationMonth = value.toString();
-				} else if (Objects.equals(kv_key, "creditCardExpirationYear")) {
-					creditCardExpirationYear = value.toString();
-				} else if (Objects.equals(kv_key, "routingNumber")) {
-					routingNumber = value.toString();
-				} else if (Objects.equals(kv_key, "accountNumber")) {
-					accountNumber = value.toString();
-				} else {
-					throw new PaymentPluginApiException("unrecognized plugin property: " + kv_key, new IllegalArgumentException());
+		try (Connection connection = dataSource.getDataSource().getConnection()) {
+			String credentialsQuery = "SELECT `loginId`, `transactionKey`, `test` FROM `authorizeNet_credentials` WHERE `tenantId` = ?";
+			try (PreparedStatement statement = connection.prepareStatement(credentialsQuery)) {
+				statement.setString(1, context.getTenantId().toString());
+				ResultSet resultSet = statement.executeQuery();
+				if (!resultSet.next()) {
+					throw new SQLException("no results");
 				}
+				loginId = resultSet.getString("loginId");
+				transactionKey = resultSet.getString("transactionKey");
+				test = resultSet.getBoolean("test");
+				logService.log(LogService.LOG_INFO, "loginId: " + loginId);
+				logService.log(LogService.LOG_INFO, "transactionKey: " + transactionKey);
+				logService.log(LogService.LOG_INFO, "test: " + test);
+			} catch (SQLException e) {
+				logService.log(LogService.LOG_ERROR, "could not retrieve credentials: ", e);
+				throw new PaymentPluginApiException("could not retrieve credentials", e);
 			}
 			
-			// get the account object for the account ID
-			final Account account;
-			try {
-				account = killbillAPI.getAccountUserApi().getAccountById(kbAccountId, context);
-			} catch (AccountApiException e) {
-				logService.log(LogService.LOG_ERROR, "could not retrieve account: ", e);
-				throw new PaymentPluginApiException("could not retrieve account", e);
+			if (loginId == null || loginId.isEmpty()) {
+				throw new PaymentPluginApiException("missing loginId", new IllegalArgumentException());
+			}
+			if (transactionKey == null || transactionKey.isEmpty()) {
+				throw new PaymentPluginApiException("missing transactionKey", new IllegalArgumentException());
 			}
 			
-			// setup the customer that will be associated with this token
+			String customerProfileId;
+			String type;
+			
+			synchronized (envLock) {
+				// Set the request to operate in either the sandbox or production environment
+				ApiOperationBase.setEnvironment(test ? Environment.SANDBOX : Environment.PRODUCTION);
+				
+				// Create object with merchant authentication details
+				MerchantAuthenticationType merchantAuthenticationType = new MerchantAuthenticationType();
+				merchantAuthenticationType.setName(loginId);
+				merchantAuthenticationType.setTransactionKey(transactionKey);
+				
+				String paymentType = null;
+				
+				String creditCardNumber = null;
+				String creditCardCVV2 = null;
+				String creditCardExpirationMonth = null;
+				String creditCardExpirationYear = null;
+				
+				String routingNumber = null;
+				String accountNumber = null;
+				
+				// get the client-passed properties including BluePay auth details and appropriate credit card or ACH details
+				for (PluginProperty property : paymentMethodProps.getProperties()) {
+					String kv_key = property.getKey();
+					Object value = property.getValue();
+					logService.log(LogService.LOG_INFO, "key: " + kv_key);
+					logService.log(LogService.LOG_INFO, "value: " + value);
+					if (Objects.equals(kv_key, "paymentType")) {
+						logService.log(LogService.LOG_INFO, "setting paymentType");
+						paymentType = value.toString();
+					} else if (Objects.equals(kv_key, "creditCardNumber")) {
+						creditCardNumber = value.toString();
+					} else if (Objects.equals(kv_key, "creditCardCVV2")) {
+						creditCardCVV2 = value.toString();
+					} else if (Objects.equals(kv_key, "creditCardExpirationMonth")) {
+						creditCardExpirationMonth = value.toString();
+					} else if (Objects.equals(kv_key, "creditCardExpirationYear")) {
+						creditCardExpirationYear = value.toString();
+					} else if (Objects.equals(kv_key, "routingNumber")) {
+						routingNumber = value.toString();
+					} else if (Objects.equals(kv_key, "accountNumber")) {
+						accountNumber = value.toString();
+					} else {
+						throw new PaymentPluginApiException("unrecognized plugin property: " + kv_key, new IllegalArgumentException());
+					}
+				}
+				
+				// get the account object for the account ID
+				final Account account;
+				try {
+					account = killbillAPI.getAccountUserApi().getAccountById(kbAccountId, context);
+				} catch (AccountApiException e) {
+					logService.log(LogService.LOG_ERROR, "could not retrieve account: ", e);
+					throw new PaymentPluginApiException("could not retrieve account", e);
+				}
+				
+				// setup the customer that will be associated with this token
 		/*HashMap<String, String> customer = new HashMap<>();
 		String firstName = account.getName() == null ? null : account.getName().substring(0, account.getFirstNameLength());
 		String lastName = account.getName() == null ? null : account.getName().substring(account.getFirstNameLength());
@@ -789,90 +796,90 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 		customer.put("phone", account.getPhone());
 		customer.put("email", account.getEmail());
 		bluePay.setCustomerInformation(customer);*/
-			
-			PaymentType paymentTypeType = new PaymentType();
-			
-			// setup paymentType-specific payment details
-			if (paymentType == null || paymentType.isEmpty()) {
-				throw new PaymentPluginApiException("missing paymentType", new IllegalArgumentException());
-			}
-			if (Objects.equals(paymentType, "card")) { // credit card
-				if (creditCardNumber == null || creditCardNumber.isEmpty()) {
-					throw new PaymentPluginApiException("missing creditCardNumber", new IllegalArgumentException());
+				
+				PaymentType paymentTypeType = new PaymentType();
+				
+				// setup paymentType-specific payment details
+				if (paymentType == null || paymentType.isEmpty()) {
+					throw new PaymentPluginApiException("missing paymentType", new IllegalArgumentException());
 				}
-				if (creditCardExpirationMonth == null || creditCardExpirationMonth.isEmpty()) {
-					throw new PaymentPluginApiException("missing creditCardExpirationMonth", new IllegalArgumentException());
-				}
-				if (creditCardExpirationYear == null || creditCardExpirationYear.isEmpty()) {
-					throw new PaymentPluginApiException("missing creditCardExpirationYear", new IllegalArgumentException());
-				}
-				if (creditCardCVV2 == null || creditCardCVV2.isEmpty()) {
-					throw new PaymentPluginApiException("missing creditCardCVV2", new IllegalArgumentException());
+				if (Objects.equals(paymentType, "card")) { // credit card
+					if (creditCardNumber == null || creditCardNumber.isEmpty()) {
+						throw new PaymentPluginApiException("missing creditCardNumber", new IllegalArgumentException());
+					}
+					if (creditCardExpirationMonth == null || creditCardExpirationMonth.isEmpty()) {
+						throw new PaymentPluginApiException("missing creditCardExpirationMonth", new IllegalArgumentException());
+					}
+					if (creditCardExpirationYear == null || creditCardExpirationYear.isEmpty()) {
+						throw new PaymentPluginApiException("missing creditCardExpirationYear", new IllegalArgumentException());
+					}
+					if (creditCardCVV2 == null || creditCardCVV2.isEmpty()) {
+						throw new PaymentPluginApiException("missing creditCardCVV2", new IllegalArgumentException());
+					}
+					
+					String twoDigitMonth = creditCardExpirationMonth;
+					if (twoDigitMonth.length() == 1) {
+						twoDigitMonth = "0" + twoDigitMonth;
+					}
+					
+					// Populate the payment data
+					CreditCardType creditCard = new CreditCardType();
+					creditCard.setCardNumber(creditCardNumber);
+					creditCard.setCardCode(creditCardCVV2);
+					creditCard.setExpirationDate(twoDigitMonth + creditCardExpirationYear);
+					paymentTypeType.setCreditCard(creditCard);
+					
+					type = TYPE_CARD;
+				} else if (Objects.equals(paymentType, "ach")) { // ACH
+					if (routingNumber == null) {
+						throw new PaymentPluginApiException("missing routingNumber", new IllegalArgumentException());
+					}
+					if (accountNumber == null) {
+						throw new PaymentPluginApiException("missing accountNumber", new IllegalArgumentException());
+					}
+					
+					BankAccountType bankAccount = new BankAccountType();
+					bankAccount.setRoutingNumber(routingNumber);
+					bankAccount.setAccountNumber(accountNumber);
+					bankAccount.setAccountType(BankAccountTypeEnum.CHECKING);
+					bankAccount.setNameOnAccount(account.getName());
+					paymentTypeType.setBankAccount(bankAccount);
+					
+					type = TYPE_BANK;
+				} else {
+					throw new PaymentPluginApiException("unknown paymentType: " + paymentType, new IllegalArgumentException());
 				}
 				
-				String twoDigitMonth = creditCardExpirationMonth;
-				if (twoDigitMonth.length() == 1) {
-					twoDigitMonth = "0" + twoDigitMonth;
-				}
+				// Set payment profile data
+				CustomerPaymentProfileType customerPaymentProfileType = new CustomerPaymentProfileType();
+				customerPaymentProfileType.setCustomerType(CustomerTypeEnum.INDIVIDUAL);
+				customerPaymentProfileType.setPayment(paymentTypeType);
 				
-				// Populate the payment data
-				CreditCardType creditCard = new CreditCardType();
-				creditCard.setCardNumber(creditCardNumber);
-				creditCard.setCardCode(creditCardCVV2);
-				creditCard.setExpirationDate(twoDigitMonth + creditCardExpirationYear);
-				paymentTypeType.setCreditCard(creditCard);
+				// Set customer profile data
+				CustomerProfileType customerProfileType = new CustomerProfileType();
+				customerProfileType.setMerchantCustomerId("M_" + account.getEmail());
+				customerProfileType.setDescription("Profile description for " + account.getEmail());
+				customerProfileType.setEmail(account.getEmail());
+				customerProfileType.getPaymentProfiles().add(customerPaymentProfileType);
 				
-				type = TYPE_CARD;
-			} else if (Objects.equals(paymentType, "ach")) { // ACH
-				if (routingNumber == null) {
-					throw new PaymentPluginApiException("missing routingNumber", new IllegalArgumentException());
-				}
-				if (accountNumber == null) {
-					throw new PaymentPluginApiException("missing accountNumber", new IllegalArgumentException());
-				}
+				// Create the API request and set the parameters for this specific request
+				CreateCustomerProfileRequest apiRequest = new CreateCustomerProfileRequest();
+				apiRequest.setMerchantAuthentication(merchantAuthenticationType);
+				apiRequest.setProfile(customerProfileType);
+				apiRequest.setValidationMode(test ? ValidationModeEnum.TEST_MODE : ValidationModeEnum.LIVE_MODE);
 				
-				BankAccountType bankAccount = new BankAccountType();
-				bankAccount.setRoutingNumber(routingNumber);
-				bankAccount.setAccountNumber(accountNumber);
-				bankAccount.setAccountType(BankAccountTypeEnum.CHECKING);
-				bankAccount.setNameOnAccount(account.getName());
-				paymentTypeType.setBankAccount(bankAccount);
+				// Call the controller
+				CreateCustomerProfileController controller = new CreateCustomerProfileController(apiRequest);
+				controller.execute();
 				
-				type = TYPE_BANK;
-			} else {
-				throw new PaymentPluginApiException("unknown paymentType: " + paymentType, new IllegalArgumentException());
-			}
-			
-			// Set payment profile data
-			CustomerPaymentProfileType customerPaymentProfileType = new CustomerPaymentProfileType();
-			customerPaymentProfileType.setCustomerType(CustomerTypeEnum.INDIVIDUAL);
-			customerPaymentProfileType.setPayment(paymentTypeType);
-			
-			// Set customer profile data
-			CustomerProfileType customerProfileType = new CustomerProfileType();
-			customerProfileType.setMerchantCustomerId("M_" + account.getEmail());
-			customerProfileType.setDescription("Profile description for " + account.getEmail());
-			customerProfileType.setEmail(account.getEmail());
-			customerProfileType.getPaymentProfiles().add(customerPaymentProfileType);
-			
-			// Create the API request and set the parameters for this specific request
-			CreateCustomerProfileRequest apiRequest = new CreateCustomerProfileRequest();
-			apiRequest.setMerchantAuthentication(merchantAuthenticationType);
-			apiRequest.setProfile(customerProfileType);
-			apiRequest.setValidationMode(test ? ValidationModeEnum.TEST_MODE : ValidationModeEnum.LIVE_MODE);
-			
-			// Call the controller
-			CreateCustomerProfileController controller = new CreateCustomerProfileController(apiRequest);
-			controller.execute();
-			
-			// Get the response
-			CreateCustomerProfileResponse response = controller.getApiResponse();
-			
-			// Parse the response to determine results
-			if (response != null) {
-				// If API Response is OK, go ahead and check the transaction response
-				if (response.getMessages().getResultCode() == MessageTypeEnum.OK) {
-					customerProfileId = response.getCustomerProfileId();
+				// Get the response
+				CreateCustomerProfileResponse response = controller.getApiResponse();
+				
+				// Parse the response to determine results
+				if (response != null) {
+					// If API Response is OK, go ahead and check the transaction response
+					if (response.getMessages().getResultCode() == MessageTypeEnum.OK) {
+						customerProfileId = response.getCustomerProfileId();
 					/*if (!response.getCustomerPaymentProfileIdList().getNumericString().isEmpty()) {
 						customerProfileId = response.getCustomerPaymentProfileIdList().getNumericString().get(0);
 					} else {
@@ -885,35 +892,39 @@ public class AuthorizeNetPaymentPluginApi implements PaymentPluginApi {
 					if (!response.getValidationDirectResponseList().getString().isEmpty()) {
 						ystem.out.println(response.getValidationDirectResponseList().getString().get(0));
 					}*/
+					} else {
+						String message = "Failed to create customer profile:  " + response.getMessages().getResultCode();
+						logService.log(LogService.LOG_ERROR, "error while creating customer profile: ", new Exception(message));
+						throw new PaymentPluginApiException("error while creating customer profile", new Exception(message));
+					}
 				} else {
-					String message = "Failed to create customer profile:  " + response.getMessages().getResultCode();
+					// Display the error code and message when response is null 
+					ANetApiResponse errorResponse = controller.getErrorResponse();
+					String message = "unknown";
+					if (!errorResponse.getMessages().getMessage().isEmpty()) {
+						message = "Error: " + errorResponse.getMessages().getMessage().get(0).getCode() + " \n" + errorResponse.getMessages().getMessage().get(0).getText();
+					}
 					logService.log(LogService.LOG_ERROR, "error while creating customer profile: ", new Exception(message));
 					throw new PaymentPluginApiException("error while creating customer profile", new Exception(message));
 				}
-			} else {
-				// Display the error code and message when response is null 
-				ANetApiResponse errorResponse = controller.getErrorResponse();
-				String message = "unknown";
-				if (!errorResponse.getMessages().getMessage().isEmpty()) {
-					message = "Error: " + errorResponse.getMessages().getMessage().get(0).getCode() + " \n" + errorResponse.getMessages().getMessage().get(0).getText();
-				}
-				logService.log(LogService.LOG_ERROR, "error while creating customer profile: ", new Exception(message));
-				throw new PaymentPluginApiException("error while creating customer profile", new Exception(message));
 			}
-		}
-		
-		String transactionIdQuery = "INSERT INTO `authorizeNet_paymentMethods` (`paymentMethodId`, `customerProfileId`, `type`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `paymentMethodId` = ?, `customerProfileId` = ?, `type` = ?";
-		try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(transactionIdQuery)) {
-			statement.setString(1, kbPaymentMethodId.toString());
-			statement.setString(2, customerProfileId);
-			statement.setString(3, type);
-			statement.setString(4, kbPaymentMethodId.toString());
-			statement.setString(5, customerProfileId);
-			statement.setString(6, type);
-			statement.executeUpdate();
+			
+			String transactionIdQuery = "INSERT INTO `authorizeNet_paymentMethods` (`paymentMethodId`, `customerProfileId`, `type`) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `paymentMethodId` = ?, `customerProfileId` = ?, `type` = ?";
+			try (PreparedStatement statement = connection.prepareStatement(transactionIdQuery)) {
+				statement.setString(1, kbPaymentMethodId.toString());
+				statement.setString(2, customerProfileId);
+				statement.setString(3, type);
+				statement.setString(4, kbPaymentMethodId.toString());
+				statement.setString(5, customerProfileId);
+				statement.setString(6, type);
+				statement.executeUpdate();
+			} catch (SQLException e) {
+				logService.log(LogService.LOG_ERROR, "could not save customerProfileId: ", e);
+				throw new PaymentPluginApiException("could not save customerProfileId", e);
+			}
 		} catch (SQLException e) {
-			logService.log(LogService.LOG_ERROR, "could not save customerProfileId: ", e);
-			throw new PaymentPluginApiException("could not save customerProfileId", e);
+			logService.log(LogService.LOG_ERROR, "could not retrieve credentials: ", e);
+			throw new PaymentPluginApiException("could not retrieve credentials", e);
 		}
 	}
 	
