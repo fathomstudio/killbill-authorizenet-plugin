@@ -31,6 +31,7 @@ import org.killbill.billing.plugin.api.notification.PluginConfigurationHandler;
 import org.osgi.service.log.LogService;
 
 import javax.annotation.Nullable;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.UUID;
@@ -127,20 +128,24 @@ public class AuthorizeNetListener extends PluginConfigurationEventHandler implem
 			logService.log(LogService.LOG_INFO, "configured with key: " + key);
 			logService.log(LogService.LOG_INFO, "configured with test: " + test);
 			
-			// save the details to the database
-			String credentialsQuery = "INSERT INTO `authorizeNet_credentials` (`tenantId`, `username`, `password`, `key`, `test`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `tenantId` = ?, `username` = ?, `password` = ?, `key` = ?, `test` = ?";
-			try (PreparedStatement statement = dataSource.getDataSource().getConnection().prepareStatement(credentialsQuery)) {
-				statement.setString(1, kbTenantId.toString());
-				statement.setString(2, username);
-				statement.setString(3, password);
-				statement.setString(4, key);
-				statement.setBoolean(5, test);
-				statement.setString(6, kbTenantId.toString());
-				statement.setString(7, username);
-				statement.setString(8, password);
-				statement.setString(9, key);
-				statement.setBoolean(10, test);
-				statement.executeUpdate();
+			try (Connection connection = dataSource.getDataSource().getConnection()) {
+				// save the details to the database
+				String credentialsQuery = "INSERT INTO `authorizeNet_credentials` (`tenantId`, `username`, `password`, `key`, `test`) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE `tenantId` = ?, `username` = ?, `password` = ?, `key` = ?, `test` = ?";
+				try (PreparedStatement statement = connection.prepareStatement(credentialsQuery)) {
+					statement.setString(1, kbTenantId.toString());
+					statement.setString(2, username);
+					statement.setString(3, password);
+					statement.setString(4, key);
+					statement.setBoolean(5, test);
+					statement.setString(6, kbTenantId.toString());
+					statement.setString(7, username);
+					statement.setString(8, password);
+					statement.setString(9, key);
+					statement.setBoolean(10, test);
+					statement.executeUpdate();
+				} catch (SQLException e) {
+					logService.log(LogService.LOG_ERROR, "could not configure tenant: ", e);
+				}
 			} catch (SQLException e) {
 				logService.log(LogService.LOG_ERROR, "could not configure tenant: ", e);
 			}
